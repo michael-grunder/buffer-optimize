@@ -127,11 +127,15 @@ int appendAggCommands(optimizerContext *ctx) {
  * Output statistics about our compression
  */
 void outputStats(optimizerContext *ctx) {
-    double pct, timing;
+    double pct=0.0, timing;
 
-    // Timing and percent savings
+    // Calculate how long the compression took
     timing = ((double)(ctx->end-ctx->start)) / CLOCKS_PER_SEC;
-    pct = 100.0 * ((double)ctx->cmd_buffer->cmd_count/(double)ctx->cmd_count);
+
+    // Calculate compression ratio
+    if(ctx->cmd_count > 0) {
+        pct = 1-((double)ctx->cmd_buffer->cmd_count/(double)ctx->cmd_count);
+    } 
 
     // Output input file
     printf("%s\t", ctx->infile);
@@ -142,7 +146,7 @@ void outputStats(optimizerContext *ctx) {
     }
 
     // Print the rest of our statistics
-    printf("%d\t%d\t%2.2f%%\t%fs\n",
+    printf("%d\t%d\t%2.2f\t%f\n",
            ctx->cmd_count, ctx->cmd_buffer->cmd_count,
            pct, timing);
 }
