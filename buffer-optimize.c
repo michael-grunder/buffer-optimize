@@ -50,8 +50,8 @@ int writeFile(optimizerContext *ctx, char *buffer, size_t size) {
 }
 
 /**
- * Process our input buffer, using our zHash object to aggregate ZINCRBY 
- * commands that can be combined together.  We read from the input file
+ * Process our input buffer, using our cmdHash object to aggregate ZINCRBY
+ * and SADD commands that can be combined together.  We read from the input file
  * in chunks, passing data to a redisReader object for parsing.  
  *
  * When we encounter anything except for a ZINCRBY command, we append it to 
@@ -59,7 +59,7 @@ int writeFile(optimizerContext *ctx, char *buffer, size_t size) {
  */
 int processBufferFile(optimizerContext *ctx) {
     unsigned int read;
-    char buffer[CHUNK_SIZE], *cmd;
+    char buffer[CHUNK_SIZE];
     redisReply *reply;
 
     // While we can read data
@@ -76,12 +76,8 @@ int processBufferFile(optimizerContext *ctx) {
 
             // If we have a reply, process it
             if(reply) {
-                cmd = reply->element[0]->str;
-                if(!strncasecmp(cmd, "zincrby", sizeof("zincrby"))) {
-                    // Add it to our hash aggregator
-                    zHashAddReply(ctx->z_hash, reply);
-                } else {
-                    // Just append any other command
+                // Either add it to our hash or to our pass-thru buffer
+                if(cmdHashAdd(ctx->cmd_hash, reply)==TYPE_UNSUPPORTED) {
                     cmdBufferAddReply(ctx->cmd_buffer, reply);
                 }
 
@@ -107,16 +103,16 @@ int appendAggCommands(optimizerContext *ctx) {
     size_t size;
 
     if(!ctx->stats) {
-        // Get ZINCRBY command buffer
-        if(zHashGetCommands(ctx->z_hash, &cmd, &size)<0)
+        // Get aggregated and hashed commands
+        if(cmdHashGetCommands(ctx->cmd_hash, &cmd, &size)!=0)
             return -1;
 
         // Append it to our overall command buffer
-        if(cmdBufferAppend(ctx->cmd_buffer, cmd, size, ctx->z_hash->count)<0)
+        if(cmdBufferAppend(ctx->cmd_buffer, cmd, size, cmdHashGetCount(ctx->cmd_hash))<0)
             return -1;
     } else {
         // Just add the aggregated command count, no need to process
-        ctx->cmd_buffer->cmd_count += ctx->z_hash->count;
+        ctx->cmd_buffer->cmd_count += cmdHashGetCount(ctx->cmd_hash);
     }
 
     // Success
@@ -134,7 +130,7 @@ void outputStats(optimizerContext *ctx) {
 
     // Calculate compression ratio
     if(ctx->cmd_count > 0) {
-        pct = 1-((double)ctx->cmd_buffer->cmd_count/(double)ctx->cmd_count);
+        pct = 1-((double)cmdHashGetCount(ctx->cmd_hash))/(double)ctx->cmd_count;
     } 
 
     // Output input file
@@ -147,7 +143,7 @@ void outputStats(optimizerContext *ctx) {
 
     // Print the rest of our statistics
     printf("%d\t%d\t%2.2f\t%f\n",
-           ctx->cmd_count, ctx->cmd_buffer->cmd_count,
+           ctx->cmd_count, cmdHashGetCount(ctx->cmd_hash),
            pct, timing);
 }
 
@@ -237,9 +233,9 @@ void initContext(optimizerContext *ctx) {
         exit(1);
     }
 
-    // Make sure we can allocate our z_hash
-    if((ctx->z_hash = zHashCreate(KHASH_SIZE, MHASH_SIZE)) == NULL) {
-        fprintf(stderr, "Error:  Couldn't create z_hash object\n");
+    // Make sure we can allocate our cmdHash
+    if((ctx->cmd_hash = cmdHashCreate(KHASH_SIZE, MHASH_SIZE)) == NULL) {
+        fprintf(stderr, "Error:  Couldn't create cmdHash object\n");
         exit(1);
     }
 
@@ -263,8 +259,8 @@ void freeContext(optimizerContext *ctx) {
         cmdBufferFree(ctx->cmd_buffer);
 
     // Free our ZINCRBY hash
-    if(ctx->z_hash) 
-        zHashFree(ctx->z_hash);
+    if(ctx->cmd_hash)
+        cmdHashFree(ctx->cmd_hash);
 
     // Close our input file
     if(ctx->fd_in)
@@ -312,10 +308,15 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    // Write our output file if directed to
-    if(!ctx.stats && writeFile(&ctx, ctx.cmd_buffer->buf, ctx.cmd_buffer->pos) < 0) {
-        fprintf(stderr, "Error writing buffer file '%s'\n", ctx.outfile);
-        exit(1);
+    // If we're not in stats mode, attempt to write the file if it's not empty
+    if(!ctx.stats) {
+        if(ctx.cmd_count>0 && writeFile(&ctx,ctx.cmd_buffer->buf,ctx.cmd_buffer->pos)<0) {
+            fprintf(stderr, "Error writing buffer file '%s'\n", ctx.outfile);
+            exit(1);
+        } else if(!ctx.cmd_count) {
+            fprintf(stderr, "Error:  Not writing empty command buffer!\n");
+            exit(1);
+        }
     }
 
     // Time the process

@@ -9,7 +9,7 @@
 #include <time.h>
 #include <getopt.h>
 
-#include "zhash.h"
+#include "cmdhash.h"
 #include "buffer.h"
 
 #define BUFFER_OPTIMIZE_VERSION "0.1.0"
@@ -91,7 +91,7 @@ typedef struct _optimizerContext {
     /**
      * ZINCRBY hash object
      */
-    zHash *z_hash;
+    cmdHash *cmd_hash;
 
 } optimizerContext;
 

@@ -5,7 +5,7 @@ OPTIMIZATION?=-O2
 CFLAGS=-Wall $(DEBUG) $(OPTIMIZATION)
 INSTALL_PATH?=/usr/local
 BIN=buffer-optimize
-DEPS=buffer.c zhash.c buffer-optimize.c
+DEPS=buffer.c cmdhash.c buffer-optimize.c
 #MANPREFIX?=/usr/share/man/man1
 #MANPAGE=csv-split.1
 #MANCMP=csv-split.1.gz
@@ -15,8 +15,8 @@ DEPS=buffer.c zhash.c buffer-optimize.c
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
 
-buffer-optimize: buffer.o zhash.o buffer-optimize.o
-	$(CC) -o $(BIN) buffer.o zhash.o buffer-optimize.o $(CFLAGS) $(LINK)
+buffer-optimize: buffer.o cmdhash.o buffer-optimize.o
+	$(CC) -o $(BIN) buffer.o cmdhash.o buffer-optimize.o $(CFLAGS) $(LINK)
 
 debug:
 	$(MAKE) OPTIMIZATION=""
