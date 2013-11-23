@@ -471,9 +471,6 @@ static inline int __append_zincrby_cmds(cmdHash *ht) {
 static inline int __append_sadd_key_cmd(cmdHash *ht, cmdKeyList *key) 
 {
     cmdMemberList *mem;
-    //char argv[key->count+2], *cmd=NULL;
-    //size_t argvlen[key->count+2];
-
     char **argv, *cmd = NULL;
     size_t *argvlen;
     unsigned int len;
