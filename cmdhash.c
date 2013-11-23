@@ -471,10 +471,23 @@ static inline int __append_zincrby_cmds(cmdHash *ht) {
 static inline int __append_sadd_key_cmd(cmdHash *ht, cmdKeyList *key) 
 {
     cmdMemberList *mem;
-    char *argv[key->count+2], *cmd=NULL;
-    size_t argvlen[key->count+2];
+    //char argv[key->count+2], *cmd=NULL;
+    //size_t argvlen[key->count+2];
+
+    char **argv, *cmd = NULL;
+    size_t *argvlen;
     unsigned int len;
     int i, idx = 2, retval;
+
+    // Allocate argument array
+    if(!(argv = malloc(sizeof(char*)*(key->count+2)))) {
+        return -1;
+    }
+    // Allocate size array
+    if(!(argvlen = malloc(sizeof(size_t)*(key->count+2)))) {
+        free(argv);
+        return -1;
+    }
 
     // "SADD"
     argv[0] = "SADD";
@@ -508,8 +521,10 @@ static inline int __append_sadd_key_cmd(cmdHash *ht, cmdKeyList *key)
     // Append to our buffer
     retval = __append_buffer(ht, cmd, len);
 
-    // Free command
+    // Cleanup
     free(cmd);
+    free(argv);
+    free(argvlen);
     
     // Return success/failure
     return retval;
