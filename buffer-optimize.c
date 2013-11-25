@@ -84,8 +84,8 @@ int processBufferFile(optimizerContext *ctx) {
                 // Increment total commands processed
                 ctx->cmd_count++;
 
-               // Clean up reply
-               freeReplyObject(reply);
+                // Clean up reply
+                freeReplyObject(reply);
             }
         } while(reply);
     }
