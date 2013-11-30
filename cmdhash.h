@@ -9,6 +9,8 @@
 #define CMD_ZINCRBY "ZINCRBY"
 #define CMD_SADD    "SADD"
 
+#define ARG_MAX 1024*1024
+
 /**
  * Initial buffer allocation size
  */

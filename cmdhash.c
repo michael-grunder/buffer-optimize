@@ -9,6 +9,7 @@
 //
 
 #include "cmdhash.h"
+#include <math.h>
 
 /**
  * Free our command buffer
@@ -473,15 +474,18 @@ static inline int __append_sadd_key_cmd(cmdHash *ht, cmdKeyList *key)
     cmdMemberList *mem;
     char **argv, *cmd = NULL;
     size_t *argvlen;
-    unsigned int len;
-    int i, idx = 2, retval;
+    unsigned int len, args, more = key->count;
+    int i, idx = 2;
+    
+    // Only allocate up to the maximum multibulk argument count
+    args = key->count+2 > ARG_MAX ? ARG_MAX: key->count+2;
 
     // Allocate argument array
-    if(!(argv = malloc(sizeof(char*)*(key->count+2)))) {
+    if(!(argv = malloc(sizeof(char*)*args))) {
         return -1;
     }
     // Allocate size array
-    if(!(argvlen = malloc(sizeof(size_t)*(key->count+2)))) {
+    if(!(argvlen = malloc(sizeof(size_t)*args))) {
         free(argv);
         return -1;
     }
@@ -502,29 +506,30 @@ static inline int __append_sadd_key_cmd(cmdHash *ht, cmdKeyList *key)
             argv[idx] = mem->member;
             argvlen[idx] = mem->len;
 
-            // Move forward
-            idx++;
+            // Move forward, decrement how many are left
+            idx++; more--;
             mem = mem->next;
+
+            // If we have hit our maximum argument count, or there are no
+            // more commands, append it.
+            if(idx >= ARG_MAX || !more) {
+                len = redisFormatCommandArgv(&cmd, idx, (const char**)argv, (const size_t*)argvlen);
+                if(len < 1 || !cmd || __append_buffer(ht,cmd,len)<0) {
+                    if(cmd) free(cmd);
+                    return -1;
+                }
+                free(cmd);
+                idx = 2;
+            }
         }
     }
 
-    // Attempt to format this command
-    len = redisFormatCommandArgv(&cmd, key->count+2, (const char **)argv,
-                                 (const size_t*)argvlen);
-
-    // Fail if there is a hiredis error
-    if(len < 1 || !cmd) return -1;
-    
-    // Append to our buffer
-    retval = __append_buffer(ht, cmd, len);
-
-    // Cleanup
-    free(cmd);
+    // Free our argument arrays
     free(argv);
     free(argvlen);
     
     // Return success/failure
-    return retval;
+    return 0;
 }
 
 /**
@@ -586,5 +591,29 @@ int cmdHashGetCommands(cmdHash *ht, char **ret, size_t *len) {
  */
 unsigned int cmdHashGetCount(cmdHash *ht) {
     if(ht == NULL) return -1;
-    return ht->z_cmds->members + ht->s_cmds->keys;
+    
+    cmdKeyList *key;
+    int i, tot;
+
+    // Start with our ZINCRBY commands
+    tot = ht->z_cmds->members;
+
+    // The number of actual SADD commands can be greater than the 
+    // unique keys, if we have to break some of them into multiple
+    // commands due to the 1024*1024 argument max
+    for(i=0;i<ht->s_cmds->ksize;i++) {
+        key = ht->s_cmds->bucket[i];
+        while(key != NULL) {
+            tot += ceil((double)key->count/(ARG_MAX-2));
+            key=key->next;
+        }
+    }
+
+    // Return our total
+    return tot;
 }
+
+
+
+
+

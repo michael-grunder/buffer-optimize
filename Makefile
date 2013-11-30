@@ -1,5 +1,5 @@
 CC:=$(shell sh -c 'type $(CC) >/dev/null 2>/dev/null && echo $(CC) || echo gcc')
-LINK=-lz -lhiredis
+LINK=-lz -lhiredis -lm
 DEBUG?=-g -ggdb
 OPTIMIZATION?=-O2
 CFLAGS=-Wall $(DEBUG) $(OPTIMIZATION)
